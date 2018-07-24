@@ -1,6 +1,7 @@
 package hdfs
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/user"
@@ -105,18 +106,25 @@ func getKrbClientWithKeytab(configPath string, keytabPath string) *client.Client
 		log.Fatalf("no entries found in keytab %s" + keytabPath)
 	}
 
-	// Fetch the principal of the first entry
-	principal := entries[0].Principal
+	// Loop through all entries in the keytab to find one that works.
+	var errString string
+	for _, entry := range entries {
+		principal := entry.Principal
 
-	cl := client.NewClientWithKeytab(strings.Join(principal.Components, "/"), principal.Realm, kt)
-	cl.WithConfig(cfg)
+		cl := client.NewClientWithKeytab(strings.Join(principal.Components, "/"), principal.Realm, kt)
+		cl.WithConfig(cfg)
 
-	// TODO Config flag or whatever for people not using AD
-	cl.GoKrb5Conf.DisablePAFXFast = true
-	if loginE := cl.Login(); loginE != nil {
-		log.Panic(loginE)
+		// TODO Config flag or whatever for people not using AD
+		cl.GoKrb5Conf.DisablePAFXFast = true
+		loginE := cl.Login()
+		if loginE != nil {
+			fmt.Sprintf(errString, "%v\n", loginE)
+		} else {
+			return &cl
+		}
 	}
-	return &cl
+	log.Panic(errString)
+	return nil
 }
 
 // GetServiceName returns 'nn' unless the HADOOP_SNAME environment variable is set
